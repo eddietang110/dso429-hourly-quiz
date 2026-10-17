@@ -97,9 +97,29 @@ def alarm(max_minutes=60):
     return not problems
 
 
+def selftest():
+    """Answer practice round 1 q1 with each configured Claude fallback tier (skips the rules)."""
+    from solver import TIERS
+
+    row = fetch_csv("questions.csv")[0]
+    ok = True
+    for name, fn in TIERS[1:]:
+        try:
+            letter = fn(row)
+        except Exception as e:  # noqa: BLE001
+            letter, ok = None, False
+            print(f"{name}: ERROR {e}")
+            continue
+        print(f"{name}: {'not configured' if letter is None else letter} (expected C)")
+        ok &= letter in (None, "C")
+    return ok
+
+
 if __name__ == "__main__":
     if "--check" in sys.argv:
         sys.exit(0 if check() else 1)
+    elif "--selftest" in sys.argv:
+        sys.exit(0 if selftest() else 1)
     elif "--alarm" in sys.argv:
         sys.exit(0 if alarm() else 1)
     else:
