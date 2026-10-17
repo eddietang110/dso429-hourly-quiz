@@ -23,11 +23,19 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install fallback dependency
-        run: pip install anthropic
+      # Fallback order inside solver.py: rules -> Claude Code (Pro subscription)
+      # -> Messages API (API key) -> guess. Both secrets are optional.
+      - name: Install fallback tools
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then npm install -g @anthropic-ai/claude-code; fi
+          if [ -n "$ANTHROPIC_API_KEY" ]; then pip install anthropic; fi
 
       - name: Answer new rounds
         env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python run.py
 
