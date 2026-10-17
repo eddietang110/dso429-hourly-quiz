@@ -46,3 +46,11 @@ jobs:
             sleep $((i * 10))
           done
           exit 1
+
+      # Turns the run red (GitHub emails you) if a round has gone unanswered
+      # for over an hour, or a question hit an unknown template and was guessed.
+      - name: Alarm on overdue or guessed answers
+        if: always()
+        run: |
+          git pull --quiet origin main || true
+          python run.py --alarm

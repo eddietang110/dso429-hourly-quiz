@@ -3,6 +3,7 @@
 Usage:
   python run.py            # answer unanswered rounds
   python run.py --check    # score solver against practice_keys.csv (no files written)
+  python run.py --alarm    # exit 1 if a round is >60 min old with no answer, or a question was guessed
 """
 import csv
 import io
@@ -10,12 +11,14 @@ import json
 import sys
 import urllib.request
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 from solver import solve
 
 BASE = "https://raw.githubusercontent.com/FaisalXL/dso429-hourly-quiz/main/"
 ANSWERS = Path(__file__).parent / "answers"
+GUESS_LOG = Path(__file__).parent / "guesses.log"
 
 
 def fetch_csv(name):
@@ -55,7 +58,7 @@ def check():
 def main():
     ANSWERS.mkdir(exist_ok=True)
     rounds = group_rounds(fetch_csv("questions.csv"))
-    written = []
+    written, guessed = [], []
     for rid in sorted(rounds):
         path = ANSWERS / f"round-{rid:04d}.json"
         if path.exists():
@@ -66,11 +69,38 @@ def main():
             letter, method = solve(row)
             answers[f"q{int(row['q_index'])}"] = letter
             methods[method] += 1
+            if method == "guess":
+                guessed.append(f"round {rid} q{row['q_index']}: {row['question_text']}")
         path.write_text(json.dumps({"round_id": rid, "answers": answers}, indent=2) + "\n")
         written.append(rid)
         print(f"round {rid}: {len(answers)} answers, {dict(methods)}")
     print(f"wrote {len(written)} round(s): {written}" if written else "nothing new")
+    if guessed:
+        GUESS_LOG.write_text("\n".join(guessed) + "\n")
+
+
+def alarm(max_minutes=60):
+    """Fail if any round released more than max_minutes ago has no answer file,
+    or if this run had to guess on any question (an unknown template)."""
+    now = datetime.now(timezone.utc)
+    problems = []
+    for rid, rows in sorted(group_rounds(fetch_csv("questions.csv")).items()):
+        released = datetime.fromisoformat(rows[0]["released_at"].replace("Z", "+00:00"))
+        age = (now - released).total_seconds() / 60
+        if age > max_minutes and not (ANSWERS / f"round-{rid:04d}.json").exists():
+            problems.append(f"OVERDUE: round {rid} released {age:.0f} min ago, no answer file")
+    if GUESS_LOG.exists():
+        problems += ["GUESSED (unknown question type): " + line for line in GUESS_LOG.read_text().splitlines()]
+    for p in problems:
+        print(p)
+    print("all clear" if not problems else f"{len(problems)} problem(s)")
+    return not problems
 
 
 if __name__ == "__main__":
-    sys.exit(0 if check() else 1) if "--check" in sys.argv else main()
+    if "--check" in sys.argv:
+        sys.exit(0 if check() else 1)
+    elif "--alarm" in sys.argv:
+        sys.exit(0 if alarm() else 1)
+    else:
+        main()
