@@ -167,7 +167,8 @@ def solve_claude_code(row):
     # drop it so this tier really bills the subscription, not the API key.
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     result = subprocess.run(
-        ["claude", "-p", llm_prompt(row), "--model", "opus", "--tools", "", "--output-format", "text"],
+        ["claude", "-p", llm_prompt(row), "--model", "claude-sonnet-5-5", "--effort", "medium",
+         "--tools", "", "--output-format", "text"],
         env=env, capture_output=True, text=True, timeout=300,
     )
     if result.returncode != 0:
@@ -182,12 +183,17 @@ def solve_api(row):
     import anthropic
 
     client = anthropic.Anthropic()
-    response = client.messages.create(
-        model="claude-opus-5-5",
+    # fallbacks="default": if Sonnet declines on a safety classifier, the API reruns the request on a fallback model.
+    response = client.beta.messages.create(
+        model="claude-sonnet-5-5",
         max_tokens=16000,
-        output_config={"effort": "high"},
+        output_config={"effort": "medium"},
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
         messages=[{"role": "user", "content": llm_prompt(row)}],
     )
+    if response.stop_reason == "refusal":
+        return None
     return parse_letter("".join(b.text for b in response.content if b.type == "text"))
 
 
