@@ -30,13 +30,19 @@ jobs:
 
       # Fallback order inside solver.py: rules -> Claude Code (Pro subscription)
       # -> Messages API (API key) -> guess. Both secrets are optional.
-      - name: Install fallback tools
+      # Separate steps that may fail: a broken install only skips its own tier,
+      # never the rule-based answers.
+      - name: Install Claude Code
+        continue-on-error: true
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then npm install -g @anthropic-ai/claude-code; fi
+
+      - name: Install Anthropic SDK
+        continue-on-error: true
+        env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then npm install -g @anthropic-ai/claude-code; fi
-          if [ -n "$ANTHROPIC_API_KEY" ]; then pip install anthropic; fi
+        run: if [ -n "$ANTHROPIC_API_KEY" ]; then pip install anthropic; fi
 
       - name: Answer new rounds
         env:
